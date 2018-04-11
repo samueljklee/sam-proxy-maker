@@ -6,6 +6,8 @@ import argparse
 
 LOGF    = "log.txt"
 INFOF   = "info.txt"
+USR     = "username" 
+PSWD    = "password"
 
 class LOGGING:
     LogFile = LOGF
@@ -30,14 +32,17 @@ class LOGGING:
         return logger
 
 class BASEAPI:
-    credentials = "username:password"
+    credentials = USR + ":" + PSWD
     api = "https://api.upcloud.com/"
     api_v = "1.2"
     token = base64.b64encode(credentials.encode())
     USER = "fast"
     PASS = "slow"
-    PORT = "3128"
+    PORT = 12175
+    ### 12173-12299
     NUMSERVER = 0
+    setOfUUID = set()
+    uuidToPort = dict()
 
     '''
     Get Account Information
@@ -69,7 +74,7 @@ class BASEAPI:
                 "title": "Chicago Server ",
                 "hostname": "server.samuel.com",
                 "plan": "1xCPU-1GB",
-                "user_data": "#!/bin/bash\nyum install squid wget httpd-tools -y\ntouch /etc/squid/passwd\nhtpasswd -b /etc/squid/passwd " + self.USER + " " + self.PASS + " \nwget -O /etc/squid/squid.conf https://raw.githubusercontent.com/samueljklee/ProxyMaker/master/squid1.conf --no-check-certificate \ntouch /etc/squid/blacklist.acl\nsystemctl restart squid.service\nsystemctl enable squid.service\niptables -I INPUT -p tcp --dport " + self.PORT + " -j ACCEPT\niptables-save",
+                "user_data": "#!/bin/bash\nyum install squid wget httpd-tools -y\ntouch /etc/squid/passwd\nhtpasswd -b /etc/squid/passwd " + self.USER + " " + self.PASS + " \nwget -O /etc/squid/squid.conf https://raw.githubusercontent.com/samueljklee/ProxyMaker/master/squid1.conf --no-check-certificate \n sed -i \"s/3128/" + str(self.PORT) + "/g\" /etc/squid/squid.conf \ntouch /etc/squid/blacklist.acl\nsystemctl restart squid.service\nsystemctl enable squid.service\niptables -I INPUT -p tcp --dport " + str(self.PORT) + " -j ACCEPT\niptables-save",
                 "storage_devices": {
                     "storage_device": [
                         {
@@ -86,9 +91,16 @@ class BASEAPI:
                 }
             }
         }
-        LOGGER.info("Creating Server ...")
+        LOGGER.info("Sending request to create server ...")
         conn = requests.post(url, headers=headers, data=json.dumps(data))
-        self.checkResponse(conn)
+        self.checkResponse(conn)        
+        res = conn.json()
+        
+        # Store UUID to PORT
+        self.uuidToPort[res["server"]["uuid"]] = self.PORT
+        self.PORT += 1
+
+        LOGGER.info("Create Servers Successful. :)")
 
     ### Zone
 
@@ -112,11 +124,14 @@ class BASEAPI:
         LOGGER.info(str(self.NUMSERVER) + " servers found!")
         
         for i in range(len(server)):
-            # Store UUID into temporary file
-            uuidFP.write(bytes(server[i]["uuid"]+"\n", encoding="utf-8"))
-            LOGGER.info("UUID: " + str(server[i]["uuid"]))
+            if server[i]["hostname"] != "dashe":
+                # Store UUID into temporary file
+                uuidFP.write(bytes(server[i]["uuid"]+"\n", encoding="utf-8"))
+                self.setOfUUID.add(server[i]["uuid"])
+                LOGGER.info("UUID: " + str(server[i]["uuid"]))
+            else:
+                LOGGER.info("UUID of DASHE Server: " + str(server[i]["uuid"]))
             
-    
     '''
     Get Storage UUID
     '''
@@ -164,13 +179,24 @@ class BASEAPI:
                     "direction": "in",
                     "family": "IPv4",
                     "protocol": "tcp",
-                    "destination_port_end": "3128",
-                    "destination_port_start": "3128",
+                    "destination_port_end": str(self.uuidToPort[uuid]),
+                    "destination_port_start": str(self.uuidToPort[uuid]),
 
                 }
             }
-            conn = requests.post(url, headers=headers, data=json.dumps(data))
-            self.checkResponse(conn)
+
+            ready = False
+            while not ready:
+                conn = requests.post(url, headers=headers, data=json.dumps(data))
+                ready = self.checkResponse(conn)
+                if ready == False:
+                    timeout = random.randint(30,60)
+                    LOGGER.warning("Server is not ready. Timeout for  " + str(timeout) + " seconds." )
+                    time.sleep(timeout)
+                else:
+                    timeout = random.randint(3,7)
+                    LOGGER.info("Server is ready. Updating Firewall. Continuing in " + str(timeout) + " seconds." )
+                    time.sleep(timeout)
 
             # Outgoing Traffic
             data = {
@@ -180,14 +206,15 @@ class BASEAPI:
                     "direction": "out",
                     "family": "IPv4",
                     "protocol": "tcp",
-                    "source_port_end": "3128",
-                    "source_port_start": "3128",
-
+                    "source_port_end": str(self.uuidToPort[uuid]),
+                    "source_port_start": str(self.uuidToPort[uuid]),
                 }
             }
 
             conn = requests.post(url, headers=headers, data=json.dumps(data))
-            self.checkResponse(conn)         
+            self.checkResponse(conn)     
+
+        LOGGER.info("Update Firewall Successful. :)")    
 
     '''
     Stop Server, Destroy Server, Destroy Storage
@@ -202,13 +229,13 @@ class BASEAPI:
                 "Authorization": "Basic " + self.token.decode(),
                 "Content-Type": "application/json"
             }
-            
+            ### Check if server is already stopped. 
             conn = requests.post(url, headers=headers)
             self.checkResponse(conn)
             
             timeout = random.randint(3,33)
-            time.sleep(timeout)
-            LOGGER.info("Stopping UUID: " + str(uuid) + ". Timeout stop for " + str(timeout) + " seconds.")    
+            LOGGER.info("Stopping UUID: " + str(uuid) + ". Timeout stop for " + str(timeout) + " seconds.")  
+            time.sleep(timeout)  
         
         LOGGER.info("Destroying servers ...")
         uuidFP.seek(0)
@@ -227,14 +254,12 @@ class BASEAPI:
                 ready = self.checkResponse(conn)
                 if ready == False:
                     timeout = random.randint(30,60)
-                    LOGGER.info("UUID: " + str(uuid) + " not ready. Timeout for " + str(timeout) + " seconds.")
+                    LOGGER.warning("UUID: " + str(uuid) + " not ready. Timeout for " + str(timeout) + " seconds.")
                     time.sleep(timeout)
                 else:
                     timeout = random.randint(3,7)
                     LOGGER.info("Success destroyed UUID: " + str(uuid) + " . Starting next in " + str(timeout) + " seconds.")
                     time.sleep(timeout)
-
-            LOGGER.info("Destroying UUID: " + str(uuid) + ".")  
         
         LOGGER.info("Destroying storages ...")
         storageFP.seek(0)
@@ -261,6 +286,8 @@ class BASEAPI:
                     time.sleep(timeout)
 
             LOGGER.info("Destroying Storage UUID: " + str(uuid) + ".")  
+        
+        LOGGER.info("Destroy Successful. :)")
 
     '''
     Get IP address
@@ -280,9 +307,10 @@ class BASEAPI:
         res = conn.json()
         ipAddr = res["ip_addresses"]["ip_address"]
         for i in range(len(ipAddr)):
-            if "public" in ipAddr[i].values() and "IPv4" in ipAddr[i].values():
+            ### if setOfUUID and uuidToPOrt is empty, FIX
+            if "public" in ipAddr[i].values() and "IPv4" in ipAddr[i].values() and ipAddr[i]["address"] in self.setOfUUID:
                 LOGGER.info("IP Adresss: " + ipAddr[i]["address"])
-                INFO.info(ipAddr[i]["address"] + ":" + self.PORT + ":" + self.USER + ":" + self.PASS)
+                INFO.info(ipAddr[i]["address"] + ":" + str(self.uuidToPort[ipAddr[i]["address"]]) + ":" + self.USER + ":" + self.PASS)
 
     '''
     Check Server Status
@@ -303,10 +331,17 @@ class BASEAPI:
 
     '''
     Compute request responds
+        200 - OK
+        201 - Created
+        202 - Accepted
+        204 - No Content - json doesn't return anything
     '''
     def checkResponse(self, res):
-        if str(res) == "<Response [204]>":
-            LOGGER.info("Command Successful. No Content.")
+        if str(res) == "<Response [200]>" or str(res) == "<Response [201]>" or str(res) == "<Response [202]>":
+            LOGGER.info("Command Successful. " + str(res.json()))
+            return True
+        elif str(res) == "<Response [204]>":
+            LOGGER.info("Command Successful.")
             return True
         data = res.json()
         LOGGER.info(str(data))
@@ -317,8 +352,9 @@ class BASEAPI:
                 return False
             elif data['error']['error_code'] == "UNAUTHORIZED_ADDRESS":
                 return False
-            else:
+            elif data['error']['error_code'] == "FIREWALL_RULE_EXISTS":
                 return True
+                
         else:
             LOGGER.info("Data: " + str(data))  
             print(data)
@@ -334,6 +370,7 @@ class ACCOUNT(BASEAPI):
     def create(self, numProx):
         endpoint = "/server"
         endpoint1 = "/firewall_rule"
+        endpoint2 = "/ip_address"
 
         while numProx > 0:
             LOGGER.info("Creating Proxy " + str(numProx) + " ...")
@@ -342,11 +379,16 @@ class ACCOUNT(BASEAPI):
             if numProx % 3 == 0:
                 # Wait between 1 minute ~ 7 minutes
                 timeout = random.randint(60,420)
-                LOGGER.info("Creating Server ... Timeout for " + str(timeout) + " ...")
+                LOGGER.info("Creating Server ... Timeout for " + str(timeout) + " seconds ...")
+                time.sleep(timeout)
+            else:
+                timeout = random.randint(7,30)
+                LOGGER.info("Creating Server ... Timeout for " + str(timeout) + " seconds ...")
                 time.sleep(timeout)
         
         self.getUUID(endpoint)
         self.firewallUpdate(endpoint, endpoint1)
+        self.getIP(endpoint2)
     
     # Stop server
     def stop(self):
