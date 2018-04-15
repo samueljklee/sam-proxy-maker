@@ -5,12 +5,12 @@ import threading
 import argparse
 
 DEBUG	= True
-TOKEN	= ""
-TOKEN	= ""
+TOKEN	= "Token"
 INFO 	= "info.txt"
 LOGS 	= "log.txt"
-PORT	= "3128"
+PORT	= "8080"
 
+"""
 class thread(threading.Thread):
 	def __init__(self,threadID):
 		threading.Thread.__init__(self)
@@ -21,10 +21,20 @@ class thread(threading.Thread):
 		connect(self.threadID)
 		LOGGER.info("Exiting Thread " + str(self.threadID))
 		if DEBUG: print("Exiting Thread " + str(self.threadID))
-
+"""
 def loggerFormat(name):
 	formatter = logging.Formatter(fmt='%(asctime)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 	handler = logging.FileHandler(LOGS,mode='w')
+	handler.setFormatter(formatter)
+	logger = logging.getLogger(name)
+	logger.setLevel(logging.DEBUG)
+	logger.addHandler(handler)
+	return logger
+
+# To store IP:PORT:USER:PASS after creation
+def infoLog(name):
+	formatter = logging.Formatter(fmt='%(message)s')
+	handler = logging.FileHandler(INFO,mode='w')
 	handler.setFormatter(formatter)
 	logger = logging.getLogger(name)
 	logger.setLevel(logging.DEBUG)
@@ -39,7 +49,7 @@ def connect(threadNum):
 	info = ip + ":" + PORT +":" + username + ":" + password
 	log = str(time.ctime(time.time())) + ": " + "Thread " + str(threadNum) + " created proxy: " + ip + ":" + PORT +":" + username + ":" + password
 	if DEBUG: print(info)
-	infoFile.write(info+"\n")
+	INFOER.info(info)
 	LOGGER.info(str(threadNum) + " " + log)
 
 def headers():
@@ -230,7 +240,7 @@ def destroyAll(infoFile):
 			checkResponse(0, req,"Destroy SUBID: " + key)
 			LOGGER.info("Desctroying SUBID: " + key)
 			### CHANGE TIME.SLEEP, IT'S TAKING TOO LONG
-			time.sleep(1)
+			time.sleep(3)
 	else:
 		print("No active servers. Skipping Destroy Servers.")
 		LOGGER.warning("No active servers. Skipping Destroy Servers.")
@@ -247,7 +257,7 @@ def destroyAll(infoFile):
 			checkResponse(0, req,"Destroy Script: " + str(key))
 			LOGGER.info("Destroying SCRIPTID: " + key)
 			### CHANGE TIME.SLEEP, IT'S TAKING TOO LONG
-			time.sleep(1)
+			time.sleep(3)
 	else:
 		print("No active scripts. Skipping Destroy Scripts.")
 		LOGGER.warning("No active scripts. Skipping Destroy Scripts.")
@@ -304,18 +314,17 @@ def checkResponse(threadNum, response,var):
 		sys.exit(0)
 
 if __name__ == "__main__":
-	LOGGER	= loggerFormat('vultr')
-	infoFile = open(INFO,"a+")
+	LOGGER = loggerFormat('vultr')
+	INFOER = infoLog('info')
 	
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--create", help = "Create Proxies", action = "store_true")
-	parser.add_argument("numProxies", type = int, nargs="?", help="Number of proxies", choices=range(1,101))
-	
-	destroyAllParser = parser.add_mutually_exclusive_group()
-	destroyAllParser.add_argument("--destroyAll", help = "Destroy All Servers. NOTE: " + INFO + " will be deleted.", action = "store_true")
+	parser.add_argument("--destroyAll", help = "Destroy All Servers. NOTE: " + INFO + " will be deleted.", action = "store_true")
+	parser.add_argument("--destroyScripts", help = "Destroy All Scripts. ", action = "store_true")
 
-	destroyScriptsParser = parser.add_mutually_exclusive_group()
-	destroyScriptsParser.add_argument("--destroyScripts", help = "Destroy All Scripts. ", action = "store_true")
+	optionalParsel = parser.add_mutually_exclusive_group()
+	optionalParsel.add_argument("-n", "--numProxies", type=int, nargs=1, help = "Number of proxies", default=1) #choices=range(1,51)
+	optionalParsel.add_argument("-d", "--debugFunc", type=str, nargs=1, help = "Debug Functions", default="account")
 
 	args = parser.parse_args()
 
@@ -324,35 +333,29 @@ if __name__ == "__main__":
 
 	if args.create:
 		print("Creating ...")
-		if args.numProxies <= 0:
+		if args.numProxies[0] <= 0:
 			if DEBUG: print("Number of Proxies has to be a postive number.")
 			if DEBUG: print("Exiting ...")
 			LOGGER.error("Number of Proxies has to be a postive number. Exiting ...")
 			sys.exit(0)
 
-		argsProxy = args.numProxies
-		threads = []
-
-		# Create all threads
-		### Maybe don't use list
-		### Modify to allow all create X number of proxies to create with Y threads.
-		### 20 proxies with 2 threads
-		### start 2, wait 2 sec, ...
+		argsProxy = args.numProxies[0]
 
 		while argsProxy > 0:
+			
 			print("Creating Proxy " + str(argsProxy % 100))
-			process = "thread" + str(argsProxy)
-			process = thread(argsProxy)
-			process.start()
-			threads.append(process)
+			if argsProxy % 3 == 0:
+				timeout = random.randint(60,300)
+			elif argsProxy % 7 == 0:
+				timeout = random.randint(300,900)
+			else:
+				timeout = random.randint(3,7)
+
+			connect(argsProxy%100)
+			LOGGER.info("Creating " + str(argsProxy % 100) + " proxy. Timeout for " + str(timeout) + " seconds.")
+			time.sleep(timeout)	
+
 			argsProxy -= 1
-
-			if argsProxy % 2 == 0:
-				time.sleep(3)
-
-		# Wait for all to finish		
-		for i in threads:
-			i.join()
 
 	elif args.destroyAll:
 		print("Destroying ...")
@@ -370,6 +373,4 @@ if __name__ == "__main__":
 		print("		--help\n")
 
 	print("Exiting ...")
-		
-	infoFile.close()
 		
