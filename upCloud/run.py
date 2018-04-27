@@ -8,16 +8,21 @@ TIME    = time.strftime("%H%M%S",time.localtime())
 LOGF    = "log.txt"
 INFOF   = TIME+"-Info.txt"
 BCKUPF  = "backup-Info.txt"
-USR     = "username"
-PSWD    = "password"
+USR     = "upcloud username" 
+PSWD    = "upcloud password"
+SVRUSR  = "user"
+SVRPSWD = "pass"
+SVRPORT = 3128
 
 class LOGGING:
     LogFile     = LOGF
     InfoFile    = INFOF
     BackupFile  = BCKUPF
 
-    # For logging
     def loggingLog(self,name):
+        """ 
+            Logging 
+        """
         formatter = logging.Formatter(fmt='%(asctime)s %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
         handler = logging.FileHandler(self.LogFile,mode='w')
         handler.setFormatter(formatter)
@@ -26,8 +31,10 @@ class LOGGING:
         logger.addHandler(handler)
         return logger
     
-    # To store IP:PORT:USER:PASS after creation
     def infoLog(self,name):
+        """ 
+            Store IP:PORT:USER:PASS 
+        """
         formatter = logging.Formatter(fmt='%(message)s')
         handler = logging.FileHandler(self.InfoFile,mode='w')
         handler.setFormatter(formatter)
@@ -36,8 +43,10 @@ class LOGGING:
         logger.addHandler(handler)
         return logger
 
-    # To Store UUID:PORT during creating
     def backupLog(self,name):
+        """ 
+            Store UUID:PORT 
+        """
         formatter = logging.Formatter(fmt='%(message)s')
         handler = logging.FileHandler(self.BackupFile,mode='w')
         handler.setFormatter(formatter)
@@ -51,19 +60,19 @@ class BASEAPI:
     api = "https://api.upcloud.com/"
     api_v = "1.2"
     token = base64.b64encode(credentials.encode())
-    USER = "hellosupreme"
-    PASS = "givemesome"
-    PORT = 65002
+    USER = SVRUSR
+    PASS = SVRPSWD
+    PORT = SVRPORT
     ### 12173-12299
     SVRCNT = 1
     NUMSERVER = 0
     setOfUUID = set()
     uuidToPort = dict()     ### uuidToPort NOT IN USE. Future?
 
-    '''
-    Get Account Information
-    '''
     def getAccount(self, endpoint):
+        """ 
+            Get Account Information 
+        """
         url = self.api + self.api_v + endpoint
         headers = {
             "Authorization": "Basic " + self.token.decode(),
@@ -75,10 +84,10 @@ class BASEAPI:
             LOGGER.info("UNAUTHORIZED_ADDRESS")
             sys.exit(0)
 
-    '''
-    Create Server
-    '''
     def createServer(self, endpoint):
+        """ 
+            Create Server 
+        """
         ready = False
         url = self.api + self.api_v + endpoint
         headers = {
@@ -129,10 +138,10 @@ class BASEAPI:
 
     ### Storage
 
-    '''
-    Get Storage UUID
-    '''
     def getStorageUUID(self, endpoint):
+        """ 
+            Get Storage UUID 
+        """
         url = self.api + self.api_v + endpoint
         headers = {
             "Authorization": "Basic " + self.token.decode(),
@@ -153,11 +162,11 @@ class BASEAPI:
             else:
                 LOGGER.info("STORAGE of Hidden Server: " + str(server[i]["uuid"]))
 
-    '''
-    Get server UUID
-    Update uuidToPort
-    '''
     def getUUID(self, endpoint):
+        """ 
+            Get Server UUID 
+            Update uuidToPort
+        """
         url = self.api + self.api_v + endpoint
         headers = {
             "Authorization": "Basic " + self.token.decode(),
