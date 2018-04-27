@@ -8,7 +8,7 @@ TIME    = time.strftime("%H%M%S",time.localtime())
 LOGF    = "log.txt"
 INFOF   = TIME+"-Info.txt"
 BCKUPF  = "backup-Info.txt"
-USR     = "username" 
+USR     = "username"
 PSWD    = "password"
 
 class LOGGING:
@@ -51,9 +51,9 @@ class BASEAPI:
     api = "https://api.upcloud.com/"
     api_v = "1.2"
     token = base64.b64encode(credentials.encode())
-    USER = "user"
-    PASS = "pass"
-    PORT = 8080
+    USER = "hellosupreme"
+    PASS = "givemesome"
+    PORT = 65002
     ### 12173-12299
     SVRCNT = 1
     NUMSERVER = 0
@@ -91,7 +91,7 @@ class BASEAPI:
                 "title": "Chicago Server " + str(self.SVRCNT),
                 "hostname": "server.booyah.com",
                 "plan": "1xCPU-1GB",
-                "user_data": "#!/bin/bash\nyum install squid wget httpd-tools -y\ntouch /etc/squid/passwd\nhtpasswd -b /etc/squid/passwd " + self.USER + " " + self.PASS + " \nwget -O /etc/squid/squid.conf https://raw.githubusercontent.com/samueljklee/ProxyMaker/master/squid1.conf --no-check-certificate \n sed -i \"s/3128/" + str(self.PORT) + "/g\" /etc/squid/squid.conf \ntouch /etc/squid/blacklist.acl\nsystemctl restart squid.service\nsystemctl enable squid.service\niptables -I INPUT -p tcp --dport " + str(self.PORT) + " -j ACCEPT\niptables-save",
+                "user_data": "#!/bin/bash\nyum install squid wget httpd-tools -y\ntouch /etc/squid/passwd\nhtpasswd -b /etc/squid/passwd " + self.USER + " " + self.PASS + " \nwget -O /etc/squid/squid.conf https://raw.githubusercontent.com/samueljklee/ProxyMaker/master/data/setup.conf --no-check-certificate \n sed -i \"s/3128/" + str(self.PORT) + "/g\" /etc/squid/squid.conf \ntouch /etc/squid/blacklist.acl\nsystemctl restart squid.service\nsystemctl enable squid.service\niptables -I INPUT -p tcp --dport " + str(self.PORT) + " -j ACCEPT\niptables-save",
                 "storage_devices": {
                     "storage_device": [
                         {
@@ -151,7 +151,7 @@ class BASEAPI:
                 storageFP.write(bytes(server[i]["uuid"]+"\n", encoding="utf-8"))
                 LOGGER.info("UUID: " + str(server[i]["uuid"]))
             else:
-                LOGGER.info("STORAGE of DASHE Server: " + str(server[i]["uuid"]))
+                LOGGER.info("STORAGE of Hidden Server: " + str(server[i]["uuid"]))
 
     '''
     Get server UUID
@@ -170,14 +170,15 @@ class BASEAPI:
         LOGGER.info(str(self.NUMSERVER) + " servers found!")
         
         for i in range(len(server)):
-            # In case server for dashe
-            if server[i]["hostname"] != "dashe":
+            # In case server for hidden
+            ### check if it's server.booyah.com instead
+            if server[i]["hostname"] != "hidden":
                 # Store UUID into temporary file
                 uuidFP.write(bytes(server[i]["uuid"]+"\n", encoding="utf-8"))
                 self.setOfUUID.add(server[i]["uuid"])
                 LOGGER.info("UUID: " + str(server[i]["uuid"]))
             else:
-                LOGGER.info("UUID of DASHE Server: " + str(server[i]["uuid"]))
+                LOGGER.info("UUID of Hidden Server: " + str(server[i]["uuid"]))
         
         # State: ran create function but crashes before firewallUpdate
         # If not using --create, but ran beforehand.
@@ -257,24 +258,32 @@ class BASEAPI:
     '''
     Stop Server, Destroy Server, Destroy Storage
     '''
+    ### if can't find server more than X times, skip it (due to manually stopping and deleting X server)
     def destroy(self, endpoint, endpoint1, endpoint2):
         uuidFP.seek(0)
         LOGGER.info("Stopping servers ...")
         for line in uuidFP:
             uuid = str(line,encoding="utf-8").strip("\n")
             url = self.api + self.api_v + endpoint + "/" + uuid + endpoint1
+            checkUrl = self.api + self.api_v + endpoint + "/" + uuid
             headers = {
                 "Authorization": "Basic " + self.token.decode(),
                 "Content-Type": "application/json"
             }
-            ### Check if server is already stopped. 
-            conn = requests.post(url, headers=headers)
-            self.checkResponse(conn)
             
-            timeout = random.randint(3,33)
-            LOGGER.info("Stopping UUID: " + str(uuid) + ". Timeout stop for " + str(timeout) + " seconds.")  
-            time.sleep(timeout)  
-        
+            conn = requests.get(checkUrl, headers=headers)
+            req = conn.json()
+
+            if req["server"]["state"] != "stopped":
+                conn = requests.post(url, headers=headers)
+                self.checkResponse(conn)
+    
+                timeout = random.randint(3,33)
+                LOGGER.info("Stopping UUID: " + str(uuid) + ". Timeout stop for " + str(timeout) + " seconds.")  
+                time.sleep(timeout)  
+            else:
+                LOGGER.info("UUID: " + str(uuid) + " is already stopped. Skipping ...") 
+
         LOGGER.info("Destroying servers ...")
         uuidFP.seek(0)
         for line in uuidFP:
@@ -286,7 +295,7 @@ class BASEAPI:
                 "Authorization": "Basic " + self.token.decode(),
                 "Content-Type": "application/json"
             }
-
+            
             while not ready:
                 conn = requests.delete(url, headers=headers)
                 ready = self.checkResponse(conn)
@@ -310,7 +319,7 @@ class BASEAPI:
                 "Authorization": "Basic " + self.token.decode(),
                 "Content-Type": "application/json"
             }
-
+            
             while not ready:
                 conn = requests.delete(url, headers=headers)
                 ready = self.checkResponse(conn)
@@ -319,7 +328,7 @@ class BASEAPI:
                     LOGGER.info("Storage UUID: " + str(uuid) + " not ready. Timeout for " + str(timeout) + " seconds.")
                     time.sleep(timeout)
                 else:
-                    timeout = random.randint(3,7)
+                    timeout = random.randint(1,3)
                     LOGGER.info("Success destroyed storage UUID: " + str(uuid) + " . Starting next in " + str(timeout) + " seconds.")
                     time.sleep(timeout)
 
@@ -391,6 +400,7 @@ class BASEAPI:
         data = res.json()
         LOGGER.info(str(data))
         key = list(data.keys())
+        ### if AUTHENTICATION_FAILED
         if key[0] == 'error' :
             LOGGER.error("Error Code: " + data['error']['error_code'])
             if data['error']['error_code'] == "SERVER_STATE_ILLEGAL":
@@ -402,6 +412,7 @@ class BASEAPI:
             elif data['error']['error_code'] == "FIREWALL_RULE_EXISTS":
                 return True
             elif data['error']['error_code'] == "SERVER_CREATING_LIMIT_REACHED":
+                print("Limit Reached. Waiting for 30 minutes ...")
                 LOGGER.warning("Waiting for 30 Minutes.")
                 time.sleep(1800)
                 return False
@@ -438,7 +449,8 @@ class ACCOUNT(BASEAPI):
                 
             proxyCnt += 1
             LOGGER.info("Creating Server ... Timeout for " + str(timeout) + " seconds ...")
-            time.sleep(timeout)
+            if proxyCnt != numProx:
+                time.sleep(timeout)
         
         self.getUUID(endpoint)
         self.firewallUpdate(endpoint, endpoint1)
