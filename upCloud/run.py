@@ -8,10 +8,10 @@ TIME    = time.strftime("%H%M%S",time.localtime())
 LOGF    = "log.txt"
 INFOF   = TIME+"-Info.txt"
 BCKUPF  = "backup-Info.txt"
-USR     = "upcloud username" 
+USR     = "upcloud username"
 PSWD    = "upcloud password"
-SVRUSR  = "user"
-SVRPSWD = "pass"
+SVRUSR  = "server username"
+SVRPSWD = "server password"
 SVRPORT = 3128
 
 class LOGGING:
@@ -203,11 +203,6 @@ class BASEAPI:
     Update Firewall Rules
     '''
     def firewallUpdate(self, endpoint, fendpoint):
-        # Wait for server to be created
-        timeout = random.randint(0,3)
-        LOGGER.info("Ready to update firewall in " + str(timeout) + " seconds.")
-        time.sleep(timeout)
-
         uuidFP.seek(0)
         LOGGER.info("Updating Firewall ...")
         for line in uuidFP:
@@ -242,9 +237,7 @@ class BASEAPI:
                     LOGGER.warning("Server is not ready. Timeout for  " + str(timeout) + " seconds." )
                     time.sleep(timeout)
                 else:
-                    timeout = random.randint(3,7)
-                    LOGGER.info("Server is ready. Updating Firewall. Continuing in " + str(timeout) + " seconds." )
-                    time.sleep(timeout)
+                    LOGGER.info("Server is ready. Updating Firewall." )
 
             # Outgoing Traffic
             data = {
@@ -287,9 +280,7 @@ class BASEAPI:
                 conn = requests.post(url, headers=headers)
                 self.checkResponse(conn)
     
-                timeout = random.randint(3,33)
-                LOGGER.info("Stopping UUID: " + str(uuid) + ". Timeout stop for " + str(timeout) + " seconds.")  
-                time.sleep(timeout)  
+                LOGGER.info("Stopping UUID: " + str(uuid))  
             else:
                 LOGGER.info("UUID: " + str(uuid) + " is already stopped. Skipping ...") 
 
@@ -313,9 +304,7 @@ class BASEAPI:
                     LOGGER.warning("UUID: " + str(uuid) + " not ready. Timeout for " + str(timeout) + " seconds.")
                     time.sleep(timeout)
                 else:
-                    timeout = random.randint(3,7)
-                    LOGGER.info("Success destroyed UUID: " + str(uuid) + " . Starting next in " + str(timeout) + " seconds.")
-                    time.sleep(timeout)
+                    LOGGER.info("Success destroyed UUID: " + str(uuid))
         
         LOGGER.info("Destroying storages ...")
         storageFP.seek(0)
@@ -337,9 +326,7 @@ class BASEAPI:
                     LOGGER.info("Storage UUID: " + str(uuid) + " not ready. Timeout for " + str(timeout) + " seconds.")
                     time.sleep(timeout)
                 else:
-                    timeout = random.randint(1,3)
-                    LOGGER.info("Success destroyed storage UUID: " + str(uuid) + " . Starting next in " + str(timeout) + " seconds.")
-                    time.sleep(timeout)
+                    LOGGER.info("Success destroyed storage UUID: " + str(uuid))
 
             LOGGER.info("Destroying Storage UUID: " + str(uuid) + ".")  
         
@@ -447,14 +434,11 @@ class ACCOUNT(BASEAPI):
             LOGGER.info("Creating Proxy " + str(proxyCnt) + " ...")
             self.createServer(endpoint)
 
-            if proxyCnt % 3 == 0:
-                # Wait between 30 seconds ~ 60 seconds
-                timeout = random.randint(30,60)
-            elif proxyCnt % 7 == 0:
+            if proxyCnt % 10 == 0:
                 # 3 minutes - 12 minutes
                 timeout = random.randint(180,720)
             else:
-                timeout = random.randint(3,33)
+                timeout = random.randint(0,3)
                 
             proxyCnt += 1
             LOGGER.info("Creating Server ... Timeout for " + str(timeout) + " seconds ...")
