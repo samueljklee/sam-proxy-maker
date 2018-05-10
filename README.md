@@ -10,14 +10,20 @@ To create multiple proxy servers using various cloud hosting providers (UpCloud,
 Guide
 --------------------
 
-Program is written in a sequential manner due to cloud providers have a "continuous creation of servers limit", once the limit is reached, the program with wait for 30 minutes before resuming. Logging is implemented to allow users to debug or check the current status of the running program. Once it is done, a text file is created with all the information of the proxies (Format: IP:PORT:USER:PASS).
+Program is written in a sequential manner due to cloud providers have a "continuous creation of servers limit", once the limit is reached, the program with wait for 30 minutes before resuming. Logging is implemented to allow users to debug or check the current status of the running program. 
+
+Once it is done, a text file is created with all the information of the proxies (Format: IP:PORT:USER:PASS).
+
 The program is written with Python 3 and other modules.
+
 Follow [this link](https://www.python.org/downloads/) to install Python 3.
+
 Install modules:
 
         pip install requests json argparse
 
 Running the program is easy. Only with a command line will create X amount of proxies servers.
+
 Creating:
 
         python run.py --create -n 5
