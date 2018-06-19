@@ -1,4 +1,4 @@
-import os, sys, time, string, random
+import os, sys, time, string, random, datetime
 import requests, base64, json
 import logging
 import tempfile
@@ -8,11 +8,11 @@ TIME    = time.strftime("%H%M%S",time.localtime())
 LOGF    = "log.txt"
 INFOF   = TIME+"-Info.txt"
 BCKUPF  = "backup-Info.txt"
-USR     = "upcloud username"
-PSWD    = "upcloud password"
-SVRUSR  = "server username"
-SVRPSWD = "server password"
-SVRPORT = 3128
+USR     = "upCloud Username"
+PSWD    = "upCloud Password"
+SVRUSR  = "proxy username"
+SVRPSWD = "proxy password"
+SVRPORT = 3132
 
 class LOGGING:
     LogFile     = LOGF
@@ -233,7 +233,7 @@ class BASEAPI:
                 conn = requests.post(url, headers=headers, data=json.dumps(data))
                 ready = self.checkResponse(conn)
                 if ready == False:
-                    timeout = random.randint(30,60)
+                    timeout = random.randint(10,30)
                     LOGGER.warning("Server is not ready. Timeout for  " + str(timeout) + " seconds." )
                     time.sleep(timeout)
                 else:
@@ -408,10 +408,14 @@ class BASEAPI:
             elif data['error']['error_code'] == "FIREWALL_RULE_EXISTS":
                 return True
             elif data['error']['error_code'] == "SERVER_CREATING_LIMIT_REACHED":
-                print("Limit Reached. Waiting for 30 minutes ...")
+                print("[" + str(datetime.datetime.now()) + "]" + " Limit Reached. Waiting for 30 minutes ...")
                 LOGGER.warning("Waiting for 30 Minutes.")
-                time.sleep(1800)
+                time.sleep(600)
+                print("[" + str(datetime.datetime.now()) + "]" + " Resumed. ")
                 return False
+            elif data['error']['error_code'] == "SERVER_RESOURCES_UNAVAILABLE":
+                time.sleep(3)
+
         else:
             LOGGER.info("Data: " + str(data))  
             print(data)
@@ -486,7 +490,15 @@ class ACCOUNT(BASEAPI):
         endpoint = "/server"
         self.getUUID(endpoint)
         self.getStatus(endpoint)
-    
+
+def vultrApiCreate(numProx):
+    LOGGER = LOGGING().loggingLog('Log File')
+    INFO = LOGGING().infoLog('Info File')
+    uuidFP = tempfile.TemporaryFile()
+    storageFP = tempfile.TemporaryFile()
+    BACKUP = LOGGING().backupLog('Backup File')
+
+    ACCOUNT().create(numProx)
 
 if __name__ == "__main__":
     LOGGER = LOGGING().loggingLog('Log File')
@@ -509,7 +521,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     startTime = time.time()
-    print("Running ...")
+    print("[" + str(datetime.datetime.now()) + "]" + " Running ...")
 
     if args.create:
         BACKUP = LOGGING().backupLog('Backup File')
