@@ -1,4 +1,4 @@
-HTTP Proxy Creator (In Development)
+SamProxyMaker
 ===============================
 
 Motivation
@@ -10,7 +10,22 @@ To create multiple proxy servers using various cloud hosting providers (UpCloud,
 Guide
 --------------------
 
-Program is written in a sequential manner due to cloud providers have a "continuous creation of servers limit", once the limit is reached, the program with wait for 30 minutes before resuming. Logging is implemented to allow users to debug or check the current status of the running program. 
+SamProxyMaker Interface (NEW)(IN DEVELOPMENT)
+
+![image](data/image/gui.PNG)
+
+An interface has been added to interact with each scripts with more ease. Currently, Gigenet, UpCloud and NetNut have been integrated into the GUI. To use it, fill in the required credentials for each providers at the credential boxes that will pop up at the 3rd column when users click on the respected cloud providers. 
+
+        Create - Create number of proxies based on the location chosen. (Credentials required)
+
+        Info - Updates or shows proxies of the chosen cloud provider. (Credentials required) 
+
+        Destroy - Destroy proxies for the selected cloud provider. (Credentials required)
+
+        Quit - Exit program and auto save credentials.  
+
+
+UpCloud script is written in a sequential manner due to cloud providers have a "continuous creation of servers limit", once the limit is reached, the program with wait for 30 minutes before resuming. Logging is implemented to allow users to debug or check the current status of the running program. 
 
 Once it is done, a text file is created with all the information of the proxies (Format: IP:PORT:USER:PASS).
 
