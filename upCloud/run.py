@@ -56,10 +56,14 @@ class LOGGING:
         return logger
 
 class BASEAPI:
-    credentials = USR + ":" + PSWD
+    global LOGGER
+    global INFO
+    global BACKUP
+    global uuidFP
+    global storageFP
+    global token
     api = "https://api.upcloud.com/"
     api_v = "1.2"
-    token = base64.b64encode(credentials.encode())
     USER = SVRUSR
     PASS = SVRPSWD
     PORT = SVRPORT
@@ -75,7 +79,7 @@ class BASEAPI:
         """
         url = self.api + self.api_v + endpoint
         headers = {
-            "Authorization": "Basic " + self.token.decode(),
+            "Authorization": "Basic " + token.decode(),
             "Content-Type": "application/json"
         }
         conn = requests.get(url, headers=headers)
@@ -91,7 +95,7 @@ class BASEAPI:
         ready = False
         url = self.api + self.api_v + endpoint
         headers = {
-            "Authorization": "Basic " + self.token.decode(),
+            "Authorization": "Basic " + token.decode(),
             "Content-Type": "application/json" 
         }
         data = {
@@ -100,7 +104,10 @@ class BASEAPI:
                 "title": "Chicago Server " + str(self.SVRCNT),
                 "hostname": "server.booyah.com",
                 "plan": "1xCPU-1GB",
-                "user_data": "#!/bin/bash\nyum install squid wget httpd-tools -y\ntouch /etc/squid/passwd\nhtpasswd -b /etc/squid/passwd " + self.USER + " " + self.PASS + " \nwget -O /etc/squid/squid.conf https://raw.githubusercontent.com/samueljklee/ProxyMaker/master/data/setup.conf --no-check-certificate \n sed -i \"s/3128/" + str(self.PORT) + "/g\" /etc/squid/squid.conf \ntouch /etc/squid/blacklist.acl\nsystemctl restart squid.service\nsystemctl enable squid.service\niptables -I INPUT -p tcp --dport " + str(self.PORT) + " -j ACCEPT\niptables-save",
+                "user_data": "#!/bin/bash\nyum install squid wget httpd-tools -y\ntouch /etc/squid/passwd\nhtpasswd -b /etc/squid/passwd " + 
+                                self.USER + " " + self.PASS + " \nwget -O /etc/squid/squid.conf https://raw.githubusercontent.com/samueljklee/SamProxyMaker/master/data/setup.conf --no-check-certificate \n sed -i \"s/3128/" + 
+                                str(self.PORT) + "/g\" /etc/squid/squid.conf \ntouch /etc/squid/blacklist.acl\nsystemctl restart squid.service\nsystemctl enable squid.service\niptables -I INPUT -p tcp --dport " + 
+                                str(self.PORT) + " -j ACCEPT\niptables-save",
                 "storage_devices": {
                     "storage_device": [
                         {
@@ -144,7 +151,7 @@ class BASEAPI:
         """
         url = self.api + self.api_v + endpoint
         headers = {
-            "Authorization": "Basic " + self.token.decode(),
+            "Authorization": "Basic " + token.decode(),
             "Content-Type": "application/json"
         }
         conn = requests.get(url, headers=headers)
@@ -169,18 +176,17 @@ class BASEAPI:
         """
         url = self.api + self.api_v + endpoint
         headers = {
-            "Authorization": "Basic " + self.token.decode(),
+            "Authorization": "Basic " + token.decode(),
             "Content-Type": "application/json"
         }
         conn = requests.get(url, headers=headers)
         res = conn.json()
+
         server = res["servers"]["server"]
         self.NUMSERVER = len(server)
         LOGGER.info(str(self.NUMSERVER) + " servers found!")
         
         for i in range(len(server)):
-            # In case server for hidden
-            ### check if it's server.booyah.com instead
             if server[i]["hostname"] != "hidden":
                 # Store UUID into temporary file
                 uuidFP.write(bytes(server[i]["uuid"]+"\n", encoding="utf-8"))
@@ -209,12 +215,11 @@ class BASEAPI:
             uuid = str(line,encoding="utf-8").strip("\n")
             url = self.api + self.api_v + endpoint + "/" + uuid + fendpoint
             headers = {
-                "Authorization": "Basic " + self.token.decode(),
+                "Authorization": "Basic " + token.decode(),
                 "Content-Type": "application/json"
             }
             
             # Incoming Traffic
-            ### for uuid not in uuidToPort FIX
             data = {
                 "firewall_rule": {
                     "action": "accept",
@@ -222,8 +227,8 @@ class BASEAPI:
                     "direction": "in",
                     "family": "IPv4",
                     "protocol": "tcp",
-                    "destination_port_end": str(self.PORT), # str(self.uuidToPort[uuid]),
-                    "destination_port_start": str(self.PORT), #str(self.uuidToPort[uuid]),
+                    "destination_port_end": str(self.PORT),
+                    "destination_port_start": str(self.PORT),
 
                 }
             }
@@ -247,8 +252,8 @@ class BASEAPI:
                     "direction": "out",
                     "family": "IPv4",
                     "protocol": "tcp",
-                    "source_port_end": str(self.PORT), # str(self.uuidToPort[uuid]),
-                    "source_port_start": str(self.PORT), # str(self.uuidToPort[uuid]),
+                    "source_port_end": str(self.PORT),
+                    "source_port_start": str(self.PORT),
                 }
             }
 
@@ -269,7 +274,7 @@ class BASEAPI:
             url = self.api + self.api_v + endpoint + "/" + uuid + endpoint1
             checkUrl = self.api + self.api_v + endpoint + "/" + uuid
             headers = {
-                "Authorization": "Basic " + self.token.decode(),
+                "Authorization": "Basic " + token.decode(),
                 "Content-Type": "application/json"
             }
             
@@ -278,8 +283,7 @@ class BASEAPI:
 
             if req["server"]["state"] != "stopped":
                 conn = requests.post(url, headers=headers)
-                self.checkResponse(conn)
-    
+                self.checkResponse(conn)   
                 LOGGER.info("Stopping UUID: " + str(uuid))  
             else:
                 LOGGER.info("UUID: " + str(uuid) + " is already stopped. Skipping ...") 
@@ -292,7 +296,7 @@ class BASEAPI:
             url = self.api + self.api_v + endpoint + "/" + uuid
 
             headers = {
-                "Authorization": "Basic " + self.token.decode(),
+                "Authorization": "Basic " + token.decode(),
                 "Content-Type": "application/json"
             }
             
@@ -314,7 +318,7 @@ class BASEAPI:
             url = self.api + self.api_v + endpoint2 + "/" + uuid
 
             headers = {
-                "Authorization": "Basic " + self.token.decode(),
+                "Authorization": "Basic " + token.decode(),
                 "Content-Type": "application/json"
             }
             
@@ -335,13 +339,12 @@ class BASEAPI:
     '''
     Get IP address
     '''
-    ### Check if it's not proxy server
     def getIP(self, endpoint, endpoint1, endpoint2):
         LOGGER.info("Finding IP Address ...")
         
         url = self.api + self.api_v + endpoint2
         headers = {
-            "Authorization": "Basic " + self.token.decode(),
+            "Authorization": "Basic " + token.decode(),
             "Content-Type": "application/json"
         }
         
@@ -357,11 +360,9 @@ class BASEAPI:
             for i in range(len(servers)):
                 if servers[i]["server"] == tempUUID and servers[i]["family"] == "IPv4" and servers[i]["access"] == "public":
                     ip = servers[i]["address"]
-
                     LOGGER.info("IP:PORT:USER:PASS: " + ip + ":" + str(self.PORT) + ":" + self.USER + ":" + self.PASS)                
                     INFO.info(ip + ":" + str(self.PORT) + ":" + self.USER + ":" + self.PASS)
                     
-
     '''
     Check Server Status
     '''
@@ -372,7 +373,7 @@ class BASEAPI:
             uuid = str(line,encoding="utf-8").strip("\n")
             url = self.api + self.api_v + endpoint + "/" + uuid
             headers = {
-                "Authorization": "Basic " + self.token.decode(),
+                "Authorization": "Basic " + token.decode(),
                 "Content-Type": "application/json"
             }
             
@@ -422,6 +423,11 @@ class BASEAPI:
         
 
 class ACCOUNT(BASEAPI):
+    global LOGGER
+    global INFO
+    global BACKUP
+    global uuidFP
+    global storageFP
     # Check connection
     def check(self):    
         endpoint = "/account"
@@ -433,7 +439,7 @@ class ACCOUNT(BASEAPI):
         endpoint1 = "/firewall_rule"
         endpoint2 = "/ip_address"
         proxyCnt = 1
-
+        
         while proxyCnt <= numProx:
             LOGGER.info("Creating Proxy " + str(proxyCnt) + " ...")
             self.createServer(endpoint)
@@ -491,14 +497,31 @@ class ACCOUNT(BASEAPI):
         self.getUUID(endpoint)
         self.getStatus(endpoint)
 
-def vultrApiCreate(numProx):
+def ucApiInit(username, password):
+    global token
+    global LOGGER
+    global INFO
+    global BACKUP
+    global uuidFP
+    global storageFP
     LOGGER = LOGGING().loggingLog('Log File')
     INFO = LOGGING().infoLog('Info File')
     uuidFP = tempfile.TemporaryFile()
     storageFP = tempfile.TemporaryFile()
     BACKUP = LOGGING().backupLog('Backup File')
 
-    ACCOUNT().create(numProx)
+    credentials = username + ":" + password
+    token = base64.b64encode(credentials.encode())
+
+def ucApiCreate(numProx):
+    ACCOUNT().create(int(numProx))
+
+def ucApiDestroy():
+    ACCOUNT().stop()
+
+def ucApiReturnFileName():
+    """ Return names of Log File and Info File """
+    return LOGF, INFOF
 
 if __name__ == "__main__":
     LOGGER = LOGGING().loggingLog('Log File')
@@ -510,18 +533,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     actionParser = parser.add_mutually_exclusive_group()
-    actionParser.add_argument("--create", help = "Create Proxies", action = "store_true")
-    actionParser.add_argument("--destroy", help = "Destroy All Servers. ", action = "store_true")
-    actionParser.add_argument("--debug", help = "Debugging Mode ", action = "store_true")
+    actionParser.add_argument("--create", help="Create Proxies", action="store_true")
+    actionParser.add_argument("--destroy", help="Destroy All Servers. ", action="store_true")
+    actionParser.add_argument("--debug", help="Debugging Mode ", action="store_true")
 
     optionalParsel = parser.add_mutually_exclusive_group()
-    optionalParsel.add_argument("-n", "--numProxies", type=int, nargs=1, help = "Number of proxies", default=1) #choices=range(1,51)
-    optionalParsel.add_argument("-d", "--debugFunc", type=str, nargs=1, help = "Debug Functions", default="account")
+    optionalParsel.add_argument("-n", "--numProxies", type=int, nargs=1, help="Number of proxies", default=1)
+    optionalParsel.add_argument("-d", "--debugFunc", type=str, nargs=1, help="Debug Functions", default="account")
 
     args = parser.parse_args()
 
     startTime = time.time()
     print("[" + str(datetime.datetime.now()) + "]" + " Running ...")
+
+    ucApiInit(USR,PSWD)
 
     if args.create:
         BACKUP = LOGGING().backupLog('Backup File')
@@ -567,4 +592,4 @@ if __name__ == "__main__":
     uuidFP.close()
     storageFP.close()
 
-    print("ProxyMaker successful. Run time: {}".format(time.time() - startTime))
+    print("SamProxyMaker successful. Run time: {}".format(time.time() - startTime))

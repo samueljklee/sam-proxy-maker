@@ -12,13 +12,14 @@ REGION      = 'ord1'
 SVRUSR      = 'proxy username'
 SVRPSWD     = 'proxy password'
 SVRPORT     = '3132'
-TIME        = time.strftime("%H%M%S",time.localtime())
 LOGF        = "log.txt"
-INFOF       = TIME+"-Info.txt"
+TIME        = time.strftime("%H%M%S",time.localtime())
+#INFOF       = TIME+"-Info.txt"
 DEBUG       = 0
 global connect
 global LOGGER
 global INFO
+global INFOF
 
 class gigaThread (threading.Thread):
     def __init__(self, instanceID, cloudIP, cloudPSWD, serverPORT, serverUSR, serverPSWD):
@@ -48,28 +49,39 @@ class gigaThread (threading.Thread):
             LOGGER.info("Instance[" + self.instanceID +"] Setting: " + self.cloudIP + ":" + self.serverPORT + ":" + self.serverUSR + ":" + self.serverPSWD)
             INFO.info(self.cloudIP + ":" + self.serverPORT + ":" + self.serverUSR + ":" + self.serverPSWD)
             
-            command = "sshpass -p " + self.cloudPSWD + " ssh -o StrictHostKeyChecking=no root@" + self.cloudIP + " 'yum install wget -y && wget https://raw.githubusercontent.com/samueljklee/ProxyMaker/master/data/setup.sh && yum update openssl -y && sed -i \"s/hello/" + self.serverUSR + "/g\" setup.sh && sed -i \"s/world/" + self.serverPSWD + "/g\" setup.sh && sed -i \"s/65002/" + self.serverPORT + "/g\" setup.sh && chmod +x setup.sh && source setup.sh' "
+            command = "sshpass -p " + self.cloudPSWD + 
+                " ssh -o StrictHostKeyChecking=no root@" + self.cloudIP + 
+                " 'yum install wget -y && wget https://raw.githubusercontent.com/samueljklee/ProxyMaker/master/data/setup.sh && yum update openssl -y && sed -i \"s/hello/" + 
+                self.serverUSR + "/g\" setup.sh && sed -i \"s/world/" + 
+                self.serverPSWD + "/g\" setup.sh && sed -i \"s/65002/" + 
+                self.serverPORT + "/g\" setup.sh && chmod +x setup.sh && source setup.sh' "
+
             subprocess.run(command, shell=True)
             
             LOGGER.info("Instance[" + self.instanceID +"] threading completed.")
         else:
             print("Cloud(" + self.instanceID +") is off. Skipping ...")
 
+def getInfoFileName():
+    return time.strftime("%H%M%S",time.localtime())+"-Info.txt"
+
 class LOGGING:
+    global INFOF
     LogFile     = LOGF
-    InfoFile    = INFOF
+    InfoFile    = getInfoFileName()
+    INFOF       = InfoFile
 
     def infoLog(self,name):
-            """ 
-                Store IP:PORT:USER:PASS 
-            """
-            formatter = logging.Formatter(fmt='%(message)s')
-            handler = logging.FileHandler(self.InfoFile,mode='w')
-            handler.setFormatter(formatter)
-            logger = logging.getLogger(name)
-            logger.setLevel(logging.DEBUG)
-            logger.addHandler(handler)
-            return logger
+        """ 
+            Store IP:PORT:USER:PASS 
+        """
+        formatter = logging.Formatter(fmt='%(message)s')
+        handler = logging.FileHandler(self.InfoFile,mode='w')
+        handler.setFormatter(formatter)
+        logger = logging.getLogger(name)
+        logger.setLevel(logging.DEBUG)
+        logger.addHandler(handler)
+        return logger
 
     def loggingLog(self,name):
         """ 
@@ -115,8 +127,8 @@ class gigaApi:
         | gcl.max.16 | 4 | 16384 | 360 |
         +------------+-----------+-------+------+
         """
-        instance = "gcl.1"
-        return instance
+        inst = "gcl.1"
+        return inst
 
     @staticmethod
     def getImage():
@@ -136,7 +148,7 @@ class gigaApi:
         @param: ImageId, InstanceType, MinCount, MaxCount
         @output: instanceId, publicIpAddress
         """
-        timeout = random.randint(1,10)
+        timeout = random.randint(3,7)
         print("[" + str(datetime.datetime.now()) + "] Creating cloud[" + str(instance) +"] in " + str(timeout) + " seconds ...")
         LOGGER.info("Creating cloud[" + str(instance) +"] in " + str(timeout) + " seconds ...")
         time.sleep(timeout)
@@ -156,12 +168,13 @@ class gigaApi:
         - Store IP and Instance Id to lists
         @returns: PublicIpAddress, Instance Id ["Reservations"]['Instances'][InstanceId]
         """   
+            
         instance = connect.describe_instances()
+
         for i in range(len(instance['Reservations'][0]['Instances'])):
             if instance['Reservations'][0]['Instances'][i]['Platform'] != 'Win16':
                 instanceIdList.append(instance['Reservations'][0]['Instances'][i]['InstanceId'])
                 publicIpAddressList.append(instance['Reservations'][0]['Instances'][i]['PublicIpAddress'])
-        
         
         LOGGER.info("Instance ID    : " + str(instanceIdList))
         LOGGER.info("IP Address     : " + str(publicIpAddressList))
@@ -220,15 +233,15 @@ def create(numServer, createNewServer, region):
     [machines.append("cloud"+str(i)) for i in range(len(instanceIdList))]   
 
     """ Initialize threads names """
-    for i in range(len(machines)):
+    for i in range(0,len(machines)):
         machines[i] = gigaThread(instanceIdList[i], publicIpAddressList[i], pswdList[i], SVRPORT, SVRUSR, SVRPSWD)
     
     """ Start threads """
-    for i in range(len(machines)):
+    for i in range(0,len(machines)):
         machines[i].start()
 
     """ Wait for threads to terminate """
-    for i in range(len(machines)):
+    for i in range(0,len(machines)):
         machines[i].join()
     
     print("\n\n\nCreation success :)")
@@ -258,13 +271,16 @@ def gigaApiInit(REGIONAPI='ord1', APIKEYAPI=APIKEY, APIHASHAPI=APIHASH):
     global INFO
     global LOGGER
     global REGION
-    INFO = LOGGING().infoLog('Info File')
+    INFO = LOGGING().infoLog(APIKEYAPI)
     LOGGER = LOGGING().loggingLog('Logging File')
 
-    REGION = REGIONAPI
+    if REGIONAPI == "":
+        REGION = 'ord1'
+    else:
+        REGION = REGIONAPI
 
-    print("{} {}".format(APIKEYAPI , APIHASHAPI))
-    connect = boto3.client('ec2',
+    session = boto3.session.Session()
+    connect = session.client('ec2',
                     endpoint_url=APIURL,
                     aws_access_key_id=APIKEYAPI,
                     aws_secret_access_key=APIHASHAPI,
@@ -282,22 +298,23 @@ def gigaApiDestroy():
 
 def gigaApiReturnFileName():
     """ Return names of Log File and Info File """
+    global INFOF
     return LOGF, INFOF
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     actionParser = parser.add_mutually_exclusive_group()
-    actionParser.add_argument("--create", help = "Create servers.", action = "store_true")
-    actionParser.add_argument("--update", help = "Update servers.", action = "store_true")
-    actionParser.add_argument("--info", help = "Information of servers. ", action = "store_true")
-    actionParser.add_argument("--terminate", help = "Terminate servers. ", action = "store_true")
-    actionParser.add_argument("--clean", help = "Remove .txt files. ", action = "store_true")
+    actionParser.add_argument("--create", help="Create servers.", action="store_true")
+    actionParser.add_argument("--update", help="Update servers.", action="store_true")
+    actionParser.add_argument("--info", help="Information of servers. ", action="store_true")
+    actionParser.add_argument("--terminate", help="Terminate servers. ", action="store_true")
+    actionParser.add_argument("--clean", help="Remove .txt files. ", action="store_true")
     
     optionalNumServers = parser.add_mutually_exclusive_group()
-    optionalNumServers.add_argument("-n", "--numServers", type=int, nargs=1, help = "Number of proxies", default=1)
+    optionalNumServers.add_argument("-n", "--numServers", type=int, nargs=1, help="Number of proxies", default=1)
     
     optionalRegion = parser.add_mutually_exclusive_group()
-    optionalRegion.add_argument("-r", "--region", type=str, nargs=1, help = "Region (ord1 | lax1)", default="ord1")
+    optionalRegion.add_argument("-r", "--region", type=str, nargs=1, help="Region (ord1 | lax1)", default="ord1")
 
     args = parser.parse_args()
     
@@ -311,7 +328,7 @@ if __name__ == "__main__":
 
         if args.numServers[0] <= 0:
             print("Check arguments.")
-            #LOGGER.error("Number of servers is empty. Exiting ...")
+            LOGGER.error("Check arguments. Exiting ...")
             sys.exit(0)
         else:
             numServer = args.numServers[0]
@@ -332,7 +349,8 @@ if __name__ == "__main__":
         create(numServer, True, REGION)
 
     # If not create
-    connect = boto3.client('ec2',
+    connect = boto3.client(
+                    'ec2',
                     endpoint_url=APIURL,
                     aws_access_key_id=APIKEY,
                     aws_secret_access_key=APIHASH,

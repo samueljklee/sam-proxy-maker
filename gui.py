@@ -3,7 +3,7 @@ SamProxyMaker
 
 Created by: samueljklee
 
-Last update: 6/19/2018
+Last update: 7/19/2018
 """
 
 import sys, os, time, math
@@ -11,29 +11,27 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPu
 from PyQt5.QtCore import QDate, QTime, QDateTime, Qt, QThread, QTimer
 from PyQt5.QtGui import *
 from giganet.run import *
+from upCloud.run import *
 from netnut.run import *
 import json
 
-class displayThread(QThread):
+class displayOutput():
     def __init__(self, source, dest):
         """ 
         Read from File == source
         Log / Proxy Display == dest
         """
-        QThread.__init__(self)
         self.src = source
         self.des = dest
-
-    def __del__(self):
-        self.wait()
+        self.run()
 
     def run(self):
-        # Not recommended: Thread that writes to widget.
         text = open(self.src, 'r').read()
         self.des.appendPlainText(text)
 
 class proxyMaker(QWidget):
-    
+    DEFAULT_LOC = 'ord1'
+
     def __init__(self):
         super().__init__()
         self.initUI()
@@ -41,7 +39,7 @@ class proxyMaker(QWidget):
 
     def initUI(self):        
         serverNames = ['GigaNet', 'UpCloud', 'Vultr', 'NetNut']
-        actionNames = ['Create', 'Info', 'Destroy', 'Quit']
+        actionNames = ['Create', 'Info', 'Destroy', 'Save and Quit']
 
         # Input Horizontal
         hbox = QVBoxLayout(self)
@@ -294,13 +292,38 @@ class proxyMaker(QWidget):
             self.logDisplay.setPlainText("Giganet chosen. Creating ...")
             self.logDisplay.appendPlainText("Number of Proxies: {}".format(numProxies))
             self.logDisplay.appendPlainText("Server Location: {}".format(serverLocation))
+
+            # Mutliple Gigenet accounts (key, hash) split by ','
+            if ',' in gigaKey or ',' in gigaHash:
+                gigaKey = gigaKey.split(",")
+                gigaHash = gigaHash.split(",")
+            else:
+                gigaKey = [gigaKey]
+                gigaHash = [gigaHash]
+
+            keyHash = {}
             
-            # Run API function in a thread and return value store in res.
-            res = [] 
-            gigaApiInit(serverLocation,gigaKey,gigaHash)
+            for i in range(0,len(gigaKey)):
+                keyHash["gigaKey{0}".format(i)] = (gigaKey[i],gigaHash[i],)
+                self.taskGigaCreate(i, keyHash, numProxies,serverLocation)
+
+        elif self.serverButtons[1].isChecked() \
+                and len(self.numberDisplay.toPlainText()) != 0:
+
+            print("Upcloud create")
+            numProxies = self.numberDisplay.toPlainText()
+            ucUsr = self.ucInfo[0].toPlainText()
+            ucPswd = self.ucInfo[1].toPlainText()
+            self.logDisplay.setPlainText("UpCloud chosen. Creating ...")
+            self.logDisplay.appendPlainText("Number of Proxies: {}".format(numProxies))
+            self.logDisplay.appendPlainText("Server Location preset as us-chi1 ")
+
+            res = []
+            ucApiInit(ucUsr, ucPswd)
             thread = threading.Thread(target=self.threadHelper, 
-                            args=(gigaApiCreate, (numProxies, serverLocation,), res))
+                        args=(ucApiCreate, (numProxies,), res))
             thread.start()
+            thread.join()
 
             # Show splash screen when thread is still running.
             stillAlive = 0
@@ -312,18 +335,14 @@ class proxyMaker(QWidget):
                     # processEvents forces app to process all events
                     app.processEvents()
                     stillAlive = 1
-            else:
-                self.splash.close()
-                self.enableAll()
 
-            logFile, infoFile = gigaApiReturnFileName()
-        
-        elif self.serverButtons[1].isChecked() \
-                and len(self.numberDisplay.toPlainText()) != 0 \
-                and len(self.locationDisplay.toPlainText()) != 0:
+            self.splash.close()
+            self.enableAll()
+            
+            logFile, infoFile = ucApiReturnFileName()
+            logThread = displayOutput(logFile,self.logDisplay)
+            proxyThread = displayOutput(infoFile,self.proxyDisplay)
 
-            print("UpCloud")
-        
         elif self.serverButtons[2].isChecked() \
                 and len(self.numberDisplay.toPlainText()) != 0 \
                 and len(self.locationDisplay.toPlainText()) != 0:
@@ -357,20 +376,19 @@ class proxyMaker(QWidget):
                     # processEvents forces app to process all events
                     app.processEvents()
                     stillAlive = 1
-            else:
-                self.splash.close()
-                self.enableAll()
+       
+            self.splash.close()
+            self.enableAll()
 
             logFile, infoFile = nnApiReturnFileName()
+            
+            logThread = displayThread(logFile,self.logDisplay)
+            proxyThread = displayThread(infoFile,self.proxyDisplay)
+            logThread.start()
+            proxyThread.start()
 
         else:
             print("Check input")
-
-        logThread = displayThread(logFile,self.logDisplay)
-        logThread.start()
-        
-        proxyThread = displayThread(infoFile,self.proxyDisplay)
-        proxyThread.start()
 
     def info(self):
         print("Info")
@@ -381,41 +399,24 @@ class proxyMaker(QWidget):
             gigaKey = self.gigaInfo[0].toPlainText()
             gigaHash = self.gigaInfo[1].toPlainText()
             self.logDisplay.setPlainText("Giganet chosen. Getting Info ...")
-            gigaApiInit(serverLocation,gigaKey,gigaHash)
 
-            # Run API function in a thread and return value store in res.
-            thread = threading.Thread(target=self.threadHelperNoArgs, 
-                            args=(gigaApiInfo,))
-            thread.start()
-
-            # Show splash screen when thread is still running.
-            stillAlive = 0
-            while thread.is_alive():
-                if not stillAlive:
-                    self.splash.show()
-                    self.disableAll()
-                    # When QSplashScreen is running, there should be an event loop running
-                    # processEvents forces app to process all events
-                    app.processEvents()
-                    stillAlive = 1
+            # Mutliple Gigenet accounts (key, hash) split by ','
+            if ',' in gigaKey or ',' in gigaHash:
+                gigaKey = gigaKey.split(",")
+                gigaHash = gigaHash.split(",")
             else:
-                self.splash.close()
-                self.enableAll()
+                gigaKey = [gigaKey]
+                gigaHash = [gigaHash]
 
+            keyHash = {}
+            
+            for i in range(0,len(gigaKey)):
+                keyHash["gigaKey{0}".format(i)] = (gigaKey[i],gigaHash[i],)
+                self.taskGigaInfo(i, keyHash, serverLocation)
+                
         else:
             print("Check input")
-
-        logFile, infoFile = gigaApiReturnFileName()
-
-        logThread = displayThread(logFile,self.logDisplay)
-        logThread.start()
-
-        proxyThread = displayThread(infoFile,self.proxyDisplay)
-        proxyThread.start()
-
-        if sys.platform == 'linux':
-            os.system("rm *.txt")
-    
+            
     def destroy(self):
         print("Destroy")
 
@@ -425,34 +426,37 @@ class proxyMaker(QWidget):
             serverLocation = self.locationDisplay.toPlainText()
             gigaKey = self.gigaInfo[0].toPlainText()
             gigaHash = self.gigaInfo[1].toPlainText()
-            gigaApiInit(serverLocation,gigaKey,gigaHash)
-
-            # Run API function in a thread and return value store in res.
-            thread = threading.Thread(target=self.threadHelperNoArgs, 
-                            args=(gigaApiDestroy,))
-            thread.start()
-
-            # Show splash screen when thread is still running.
-            stillAlive = 0
-            while thread.is_alive():
-                if not stillAlive:
-                    self.splash.show()
-                    self.disableAll()
-                    # When QSplashScreen is running, there should be an event loop running
-                    # processEvents forces app to process all events
-                    app.processEvents()
-                    stillAlive = 1
+            
+            # Mutliple Gigenet accounts (key, hash) split by ','
+            if ',' in gigaKey or ',' in gigaHash:
+                gigaKey = gigaKey.split(",")
+                gigaHash = gigaHash.split(",")
             else:
-                self.splash.close()
-                self.enableAll()
+                gigaKey = [gigaKey]
+                gigaHash = [gigaHash]
 
+            keyHash = {}
+            
+            for i in range(0,len(gigaKey)):
+                keyHash["gigaKey{0}".format(i)] = (gigaKey[i],gigaHash[i],)
+                self.taskGigaDestroy(i, keyHash, serverLocation)
+
+        elif self.serverButtons[1].isChecked():
+            print("Upcloud destroy")
+            ucUsr = self.ucInfo[0].toPlainText()
+            ucPswd = self.ucInfo[1].toPlainText()
+            self.logDisplay.setPlainText("UpCloud chosen. destroy ...")
+            
+            res = []
+            ucApiInit(ucUsr, ucPswd)
+            ucApiDestroy()
+            
+            logFile, infoFile = ucApiReturnFileName()
+            logThread = displayOutput(logFile,self.logDisplay)
+            proxyThread = displayOutput(infoFile,self.proxyDisplay)
+        
         else:
             print("Check input")
-
-        logFile, infoFile = gigaApiReturnFileName()
-
-        logThread = displayThread(logFile,self.logDisplay)
-        logThread.start()
 
         if sys.platform == 'linux':
             os.system("rm *.txt")
@@ -484,6 +488,94 @@ class proxyMaker(QWidget):
 
         QApplication.quit()
 
+    def taskGigaCreate(self, idx, keyHashDict, numProxies, serverLocation):
+        keyHash = keyHashDict["gigaKey{0}".format(idx)]
+        print("[DEBUG] Runnning {}: {} | {} | {} | {} | {}".format(
+            idx, keyHashDict["gigaKey{0}".format(idx)], keyHash[0], keyHash[1], numProxies, serverLocation))
+        # Run API function in a thread and return value store in res.
+        res = [] 
+        gigaApiInit(serverLocation,keyHash[0],keyHash[1])
+        thread = threading.Thread(target=self.threadHelper, 
+                        args=(gigaApiCreate, (numProxies,serverLocation,), res))
+        thread.start()
+        thread.join()
+
+        # Show splash screen when thread is still running.
+        stillAlive = 0
+        while thread.is_alive():
+            if not stillAlive:
+                self.splash.show()
+                self.disableAll()
+                # When QSplashScreen is running, there should be an event loop running
+                # processEvents forces app to process all events
+                app.processEvents()
+                stillAlive = 1
+
+        self.splash.close()
+        self.enableAll()
+        
+        logFile, infoFile = gigaApiReturnFileName()
+        logThread = displayOutput(logFile,self.logDisplay)
+        proxyThread = displayOutput(infoFile,self.proxyDisplay)
+
+    def taskGigaInfo(self, idx, keyHashDict, serverLocation):
+        keyHash = keyHashDict["gigaKey{0}".format(idx)]
+        print("[DEBUG]Runnning {}: {} | {} | {} | {}".format(
+            idx, keyHashDict["gigaKey{0}".format(idx)], keyHash[0], keyHash[1], serverLocation))
+        
+        gigaApiInit(serverLocation,keyHash[0],keyHash[1])
+        # Run API function in a thread and return value store in res.
+        thread = threading.Thread(target=self.threadHelperNoArgs, 
+                        args=(gigaApiInfo,))
+        thread.start()
+
+        # Show splash screen when thread is still running.
+        stillAlive = 0
+        while thread.is_alive():
+            if not stillAlive:
+                self.splash.show()
+                self.disableAll()
+                # When QSplashScreen is running, there should be an event loop running
+                # processEvents forces app to process all events
+                app.processEvents()
+                stillAlive = 1
+
+        self.splash.close()
+        self.enableAll()
+
+        logFile, infoFile = gigaApiReturnFileName()
+
+        logThread = displayOutput(logFile,self.logDisplay)
+        proxyThread = displayOutput(infoFile,self.proxyDisplay) 
+
+    def taskGigaDestroy(self, idx, keyHashDict, serverLocation=DEFAULT_LOC):
+        keyHash = keyHashDict["gigaKey{0}".format(idx)]
+        print("[DEBUG] Runnning {}: {} | {} | {} | {}".format(
+            idx, keyHashDict["gigaKey{0}".format(idx)], keyHash[0], keyHash[1], serverLocation))
+        
+        gigaApiInit(serverLocation,keyHash[0],keyHash[1])
+        # Run API function in a thread and return value store in res.
+        thread = threading.Thread(target=self.threadHelperNoArgs, 
+                        args=(gigaApiDestroy,))
+        thread.start()
+
+        # Show splash screen when thread is still running.
+        stillAlive = 0
+        while thread.is_alive():
+            if not stillAlive:
+                self.splash.show()
+                self.disableAll()
+                # When QSplashScreen is running, there should be an event loop running
+                # processEvents forces app to process all events
+                app.processEvents()
+                stillAlive = 1
+            
+        self.splash.close()
+        self.enableAll()
+
+        logFile, infoFile = gigaApiReturnFileName()
+
+        logThread = displayOutput(logFile,self.logDisplay)
 
 class MainWindow(QMainWindow):
     
@@ -508,6 +600,10 @@ class MainWindow(QMainWindow):
         # Main Widgets
         widget = proxyMaker()
         self.setCentralWidget(widget)
+    
+    def closeEvent(self, event):
+        print("Exiting...")
+        event.accept()
 
 
 if __name__ == '__main__':
