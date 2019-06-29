@@ -10,7 +10,7 @@ To create multiple proxy servers using various cloud hosting providers (UpCloud,
 Guide
 --------------------
 
-SamProxyMaker Interface (NEW)(IN DEVELOPMENT)
+SamProxyMaker Interface (Deprecated)
 
 ![image](data/image/gui.PNG)
 
